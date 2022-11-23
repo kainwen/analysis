@@ -7,15 +7,15 @@ from collections import namedtuple
 from pg import DB
 
 
-conn_pt = re.compile(r"con([0-9]+)")
-Proc = namedtuple('Proc', ['timestamp', 'pid', 'ppid', 'rss', 'vsz', 'is_postgres', 'sess_id', 'comm'])
+conn_pt = re.compile(r"con([0-9]+) seg([0-9]+)")
+Proc = namedtuple('Proc', ['timestamp', 'pid', 'ppid', 'rss', 'vsz', 'is_postgres', 'sess_id', 'seg_id', 'comm'])
 
-def get_session_id(comm):
+def get_session_seg_id(comm):
     m = conn_pt.findall(comm)
     if m:
-        return int(m[0])
+        return int(m[0][0]), int(m[0][1])
     else:
-        return None
+        return None, None
 
 def parse_file(path):
     samples = []
@@ -41,8 +41,9 @@ def parse_file(path):
             pid, ppid, rss, vsz = ls[:4]
             comm = " ".join(ls[12:])
             is_postgres = "postgres" in comm
-            sess_id = get_session_id(comm)
-            proc = Proc(current_ts.strftime('%Y%m%d %H:%M:%S'), int(pid), int(ppid), int(rss), int(vsz), is_postgres, sess_id, comm)
+            sess_id, seg_id = get_session_seg_id(comm)
+            proc = Proc(current_ts.strftime('%Y%m%d %H:%M:%S'), int(pid), int(ppid), int(rss),
+                        int(vsz), is_postgres, sess_id, seg_id, comm)
             samples.append(proc)
 
         return samples
@@ -69,8 +70,7 @@ if __name__ == "__main__":
     parser.add_argument('--tabname', type=str, help='Table to Load data', required=True)
 
     args = parser.parse_args()
-    # create table t(time timestamp, pid int,ppid int,rss int,vsz int,is_postgres boolean,sess_id int,comm text);
+    # create table t(time timestamp, pid int,ppid int,rss int,vsz int,
+    #                is_postgres boolean,sess_id int,seg_id int,comm text);
     s = parse_file(args.input)
     load_to_pg(args.host, args.port, args.dbname, args.user, args.tabname, s)
-    
-    
